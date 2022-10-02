@@ -1,12 +1,18 @@
 import { AppError, HttpCode } from "../errorHandler/AppError";
 import { NextFunction, Request, Response } from "express";
-import { UserType } from '../models/user'
-import TransactionModel, { TransactionType, Status } from "../models/transaction";
+import { SchemaDataType, UserType } from '../models/user'
+import TransactionModel, { ITransactionDocument, TransactionType } from "../models/transaction";
+import StatusModel from "../models/status";
 import { User } from "./user";
-import { Schema } from 'mongoose'
+import { Types } from 'mongoose'
+import sanitize from "mongo-sanitize";
 
-
-const ObjectId = Schema.Types.ObjectId
+const validApprovers = [
+	'ADMIN',
+	'CHAIRPERSON',
+	'DEAN',
+	'VPAA'
+]
 
 export default  {
 	test: (req: Request, res: Response, next: NextFunction) => {
@@ -18,14 +24,20 @@ export default  {
 	create: async (req: Request, res: Response, next: NextFunction) => {
 		try {
 			const { body, user } = req
-			const { id } = user as User
+			const { id, userType } = user as User
 			const data: { transactionType: TransactionType } = body
+
+			if (userType !== UserType.STUDENT) throw new Error('Students are only allowed to create transaction.')
+
+			const statusDoc = await StatusModel.findOne({ status: "For Chairperson's Approval" })
+			if (!statusDoc) {
+				throw new Error('Status does not exist')
+			}
 
 			const newTransaction = new TransactionModel({
 				student: id,
-				transactionType: data.transactionType,
-				dateSubmitted: new Date(),
-				status: Status.SUBMITTED
+				status: statusDoc._id,
+				...body
 			})
 			const createdTransaction = await newTransaction.save()
 
@@ -43,9 +55,9 @@ export default  {
 			const { _id } = params
 
 
-			const transactionDoc = await TransactionModel.findById(_id)
+			const transactionDoc = await TransactionModel.findById(_id).populate('status', '_id status').populate('student', '_id firstName lastName studentNumber studentType')
 			if (transactionDoc) {
-				if (userType !== UserType.ADMIN && id.toString() !== transactionDoc.student.toString()) {
+				if (userType === UserType.STUDENT && id.toString() !== transactionDoc.student._id.toString()) {
 					throw new Error('Invalid action')
 				}
 				res.json({
@@ -56,6 +68,7 @@ export default  {
 			}
 
 		} catch(err: any) {
+			console.log(err,'error')
 			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
 		}
 	},
@@ -68,15 +81,17 @@ export default  {
 			
 			if (userType === UserType.STUDENT) {
 				match = {
-					student: new ObjectId(id)
+					student: id
 				}
 			}
 
-			const transactionDocs = await TransactionModel.find(match).populate(['student', 'approvedBy']).exec()
+			// const transactionDocs = await TransactionModel.find(match)
+			const transactionDocs = await TransactionModel.aggregate(TransactionModel.schemaData(SchemaDataType.TABLE, user))
 			res.json({
 				data: transactionDocs
 			})
 		} catch(err: any) {
+			console.log(err, 'error')
 			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
 		}
 	},
@@ -86,14 +101,15 @@ export default  {
 			const { userType } = user as User
 			const { _id } = params
 
-			const transactionDoc = await TransactionModel.findById(_id)
+			let transactionDoc = await TransactionModel.findById(_id)
 			if (transactionDoc) {
-				if (userType !== UserType.ADMIN) {
-					throw new Error('Invalid action')
-				}
-				transactionDoc.remarks = req.body.remarks
-				transactionDoc.status = Status.PENDING
-				const updateDoc = await transactionDoc.save()
+				// if (userType !== UserType.ADMIN) {
+				// 	throw new Error('Invalid action')
+				// }
+				transactionDoc = Object.assign(transactionDoc, {...req.body})
+				const updateDoc = await (transactionDoc as (ITransactionDocument & {
+					_id: Types.ObjectId;
+				}) ).save()
 				res.json({
 					data: updateDoc
 				})
@@ -113,10 +129,9 @@ export default  {
 
 			const transactionDoc = await TransactionModel.findById(_id)
 			if (transactionDoc) {
-				if (userType !== UserType.ADMIN) {
+				if (userType === UserType.STUDENT) {
 					throw new Error('Invalid action')
 				}
-				transactionDoc.status = Status.DONE
 				const updateDoc = await transactionDoc.save()
 				res.json({
 					data: updateDoc
@@ -128,5 +143,50 @@ export default  {
 		} catch(err: any) {
 			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
 		}
+	},
+	newApprove: async (req: Request, res: Response, next: NextFunction) => {
+		try {
+			const { params, user } = req
+			const { userType } = user as User
+			const { _id } = params
+
+			const transactionDoc = await TransactionModel.findById(_id)
+			if (transactionDoc) {
+				if (userType === UserType.STUDENT) {
+					throw new Error('Invalid action')
+				}
+				await transactionDoc.processNextStatus()
+				const updateDoc = await transactionDoc.save()
+				res.json({
+					data: updateDoc
+				})
+			} else {
+				throw new Error('Document does not exist')
+			}
+
+		} catch(err: any) {
+			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
+		}
+	},
+	transactionNextStatus: async (req: Request, res: Response, next: NextFunction) => {
+		try {
+			const { params, user } = req
+			const { userType } = user as User
+			const { _id } = params
+
+			const transactionDoc = await TransactionModel.findById(_id)
+			if (transactionDoc) {
+				const statusDoc = await StatusModel.findById(transactionDoc.status)
+				res.json({
+					data: statusDoc
+				})
+			} else {
+				throw new Error('Document does not exist')
+			}
+
+		} catch(err: any) {
+			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
+		}
+
 	}
 }

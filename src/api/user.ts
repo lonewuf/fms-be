@@ -21,6 +21,12 @@ export default (router: Router) => {
 			UserController.register
 		)
 
+	
+	router.route('/user/registerFromAdmin')
+		.post(
+			UserController.registerFromAdmin
+		)
+
 	router.route('/user/login')
 		.post(
 			UserController.login
@@ -38,5 +44,10 @@ export default (router: Router) => {
 			checkToken,
 			passport.authenticate('jwt', { session: false }),
 			UserController.view
+		)
+		.patch(
+			checkToken,
+			passport.authenticate('jwt', { session: false }),
+			UserController.update
 		)
 }

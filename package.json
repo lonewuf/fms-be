@@ -9,6 +9,7 @@
     "server": "nodemon dist/server.js",
     "compile": "tsc .",
     "watch": "tsc -w",
+    "seed-status": "node dist/scripts/seed-status.js",
     "dev": "concurrently \"npm run watch\" \"npm run server\""
   },
   "keywords": [],
