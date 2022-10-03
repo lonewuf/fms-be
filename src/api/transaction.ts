@@ -40,6 +40,13 @@ export default (router: Router) => {
 			TransactionController.newApprove
 		)
 
+	router.route('/transaction/reject/:_id')
+		.patch(
+			checkToken,
+			passport.authenticate('jwt', { session: false }),
+			TransactionController.reject
+		)
+
 	router.route('/transaction/nextStatus/:_id')
 		.get(
 			checkToken,

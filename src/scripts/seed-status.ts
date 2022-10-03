@@ -36,7 +36,8 @@ const statuses = [
 	"For Chairperson's Approval",
 	"For Dean's Approval",
 	"For VPAA's Approval",
-	"Done"
+	"Done",
+	"Rejected"
 ]
 
 const seedStatus = async () => {

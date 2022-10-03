@@ -30,7 +30,8 @@ export enum StatusType {
 	FOR_CHAIPERSON_APPROVAL = "For Chairperson's Approval",
 	FOR_DEAN_APPROVAL ="For Dean's Approval",
 	FOR_VPAA_APPROVAL ="For VPAA's Approval",
-	DONE = "Done"
+	DONE = "Done",
+	REJECTED = "Rejected"
 }
 
 interface IStatus {

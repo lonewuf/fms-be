@@ -68,7 +68,6 @@ export default  {
 			}
 
 		} catch(err: any) {
-			console.log(err,'error')
 			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
 		}
 	},
@@ -91,7 +90,6 @@ export default  {
 				data: transactionDocs
 			})
 		} catch(err: any) {
-			console.log(err, 'error')
 			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
 		}
 	},
@@ -156,6 +154,32 @@ export default  {
 					throw new Error('Invalid action')
 				}
 				await transactionDoc.processNextStatus()
+				const updateDoc = await transactionDoc.save()
+				res.json({
+					data: updateDoc
+				})
+			} else {
+				throw new Error('Document does not exist')
+			}
+
+		} catch(err: any) {
+			next(new AppError({ httpCode: HttpCode.BAD_REQUEST, description: err.message }))
+		}
+	},
+	reject: async (req: Request, res: Response, next: NextFunction) => {
+		try {
+			const { params, user } = req
+			const { userType } = user as User
+			const { _id } = params
+			const allowedUsersToReject = [ UserType.ADMIN, UserType.VPAA ]
+
+			const transactionDoc = await TransactionModel.findById(_id)
+			if (transactionDoc) {
+				if (!allowedUsersToReject.includes(userType)) {
+					throw new Error('Invalid action')
+				}
+
+				await transactionDoc.rejectTransaction()
 				const updateDoc = await transactionDoc.save()
 				res.json({
 					data: updateDoc

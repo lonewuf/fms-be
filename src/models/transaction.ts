@@ -98,6 +98,7 @@ export interface ITransactionDocument extends ITransaction, Document {
 	statusChecker: (status: string) => Promise<boolean>,
 	processNextStatus: () => Promise<void>
 	isValidApprover: (userType: UserType) => Promise<void> 
+	rejectTransaction: () => Promise<void>
 }
 
 // statics
@@ -247,6 +248,36 @@ TransactionSchema.methods.processNextStatus = async function(this: ITransactionD
 			this.status = nextStatusDoc._id
 			
 			if (currentStatusIndex + 1 === transactionProcess.length - 1) this.isDone = true
+
+			return
+		}
+		throw new Error('No status found.')
+	} catch (err: any) {
+		throw new Error(err.message)
+	}
+}
+
+TransactionSchema.methods.rejectTransaction = async function(this: ITransactionDocument) {
+	try {
+		const statusDoc = await Status.findById({ _id: this.status })
+		const rejectStatus = await Status.findOne({ status: 'Rejected' })
+
+		// Get next status
+		if (statusDoc) {
+			const transactionProcess = transactionProcesses[this.transactionType]
+			if (!transactionProcess) {
+				throw new Error('Status does not exist.')
+			}
+
+			if (statusDoc.status !== "For VPAA's Approval") {
+				throw new Error('Invalid action.')
+			}
+
+			if (!rejectStatus) {
+				throw new Error('Rejected status does not exist.')
+			}
+
+			this.status = rejectStatus._id
 
 			return
 		}
